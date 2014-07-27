@@ -8,6 +8,7 @@ exports.transitionTo = require('./helpers/transitionTo');
 
 exports.ActiveState = require('./mixins/ActiveState');
 exports.AsyncState = require('./mixins/AsyncState');
+exports.ScrollsOnTransition = require('./mixins/ScrollsOnTransition');
 
 // Backwards compat with 0.1. We should
 // remove this when we ship 1.0.
