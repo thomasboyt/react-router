@@ -18,6 +18,36 @@ var Promise = require('es6-promise').Promise;
 var REF_NAME = '__activeRoute__';
 
 /**
+ * The default handler for active state updates.
+ */
+function handleActiveStateChange(state) {
+  ActiveStore.updateState(state);
+}
+
+/**
+ * The default handler for cancelled transitions. Redirects replace
+ * the current URL and aborts roll it back.
+ */
+function handleCancelledTransition(transition) {
+  var reason = transition.cancelReason;
+
+  if (reason instanceof Redirect) {
+    replaceWith(reason.to, reason.params, reason.query);
+  } else if (reason instanceof Abort) {
+    goBack();
+  }
+}
+
+/**
+ * The default handler for errors that were thrown asynchronously
+ * while transitioning. The default behavior is to re-throw the
+ * error so that it isn't silently swallowed.
+ */
+function handleTransitionError(error) {
+  throw error; // This error probably originated in a transition hook.
+}
+
+/**
  * The <Routes> component configures the route hierarchy and renders the
  * route matching the current location when rendered into a document.
  *
@@ -26,39 +56,19 @@ var REF_NAME = '__activeRoute__';
 var Routes = React.createClass({
   displayName: 'Routes',
 
-  statics: {
-
-    /**
-     * Handles errors that were thrown asynchronously. By default, the
-     * error is re-thrown so we don't swallow them silently.
-     */
-    handleAsyncError: function (error, route) {
-      throw error; // This error probably originated in a transition hook.
-    },
-
-    /**
-     * Handles cancelled transitions. By default, redirects replace the
-     * current URL and aborts roll it back.
-     */
-    handleCancelledTransition: function (transition, routes) {
-      var reason = transition.cancelReason;
-
-      if (reason instanceof Redirect) {
-        replaceWith(reason.to, reason.params, reason.query);
-      } else if (reason instanceof Abort) {
-        goBack();
-      }
-    }
-
-  },
-
   propTypes: {
     location: React.PropTypes.oneOf([ 'hash', 'history' ]).isRequired,
+    onActiveStateChange: React.PropTypes.func.isRequired,
+    onCanceledTransition: React.PropTypes.func.isRequired,
+    onTransitionError: React.PropTypes.func.isRequired
   },
 
   getDefaultProps: function () {
     return {
-      location: 'hash'
+      location: 'hash',
+      onActiveStateChange: handleActiveStateChange,
+      onCanceledTransition: handleCancelledTransition,
+      onTransitionError: handleTransitionError
     };
   },
 
@@ -148,9 +158,9 @@ var Routes = React.createClass({
 
     var promise = syncWithTransition(routes, transition).then(function (newState) {
       if (transition.isCancelled) {
-        Routes.handleCancelledTransition(transition, routes);
+        routes.props.onCancelledTransition(transition);
       } else if (newState) {
-        ActiveStore.updateState(newState);
+        routes.props.onActiveStateChange(newState);
       }
 
       return transition;
@@ -160,7 +170,7 @@ var Routes = React.createClass({
       promise = promise.then(undefined, function (error) {
         // Use setTimeout to break the promise chain.
         setTimeout(function () {
-          Routes.handleAsyncError(error, routes);
+          routes.props.onTransitionError(error);
         });
       });
     }
